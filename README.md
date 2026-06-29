@@ -35,6 +35,11 @@ This isn't "Tetris with a bot." A few things set it apart:
 - **Garbage warfare.** Clearing N lines doesn't just score points — it dumps
   `N × 2` garbage rows onto your opponent's board from the bottom, each solid
   except a single gap. A good multi-line clear can bury the other player.
+- **Watch it play itself.** Press **L** on the start screen to flip into
+  **LLM vs LLM** mode — the model battles itself across both boards, each side
+  narrating its own moves in its own panel.
+- **It's a match, not a round.** A running **wins scoreboard** sits at the top
+  and survives restarts, so you can settle it over many games.
 - **Works with any small local model.** The opponent runs against any
   OpenAI-compatible endpoint. The menu is presented best-candidate-first, so even
   a tiny 0.5B model plays a clean board. If the model ever stalls or replies with
@@ -134,6 +139,14 @@ On the paused start screen, press **L** to switch between:
   gets its own reply panel so you can watch both trains of thought. Keyboard
   input is disabled in this mode. Press **L** again to switch back.
 
+### Scoring & restart
+
+A **wins scoreboard** sits at the top centre and tallies completed games for each
+side (colour-matched to the two boards). When a game ends, a prominent
+**“press R to restart”** prompt appears; restarting **keeps the score**, so you
+can play a long match across many rounds. Switching mode with **L** starts a
+fresh scoreboard.
+
 ---
 
 ## Configuration
@@ -210,9 +223,9 @@ tetris/
   llm_player.py   OpenAI-compatible client, async requests, reply parsing
   assets.py       loads the generated PNGs into pygame surfaces
   renderer.py     draws boards, HUDs, reply panel, overlays
-  main.py         game loop, input/DAS, the LLM controller (pipeline + tempo)
+  main.py         game loop, input/DAS, modes + scoreboard, LLM controller (pipeline + tempo)
 generate_assets.py    procedural Pillow art (auto-runs on first launch)
-tests/smoke.py        headless logic checks (115 assertions, no window/network)
+tests/smoke.py        headless logic checks (118 assertions, no window/network)
 tests/capture.py      headless screenshot + live-LLM functional test
 config.example.json   template config (copy to config.json)
 play.bat              double-click launcher (Windows)
@@ -225,6 +238,7 @@ run.py                python entry point
 python tests/smoke.py            # geometry, board, garbage, enumerator, parser, full loop
 python tests/capture.py --llm    # hits your real endpoint, saves preview_llm.png
 python tests/capture.py          # heuristic-only screenshot, saves preview_nollm.png
+python tests/capture.py --ai --llm  # LLM vs LLM screenshot, saves preview_ai.png
 ```
 
 ---
