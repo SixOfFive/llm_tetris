@@ -298,6 +298,9 @@ class BattleTetris:
         self.model_name = base_name
         self.vs_mode = "human"          # "human" | "ai"
         self._left_warmed = False
+        # session scoreboard (survives restarts; reset on a mode switch)
+        self.score_left = 0
+        self.score_right = 0
 
         pygame.init()
         pygame.display.set_caption("Tetris Duel  ·  You vs LLM")
@@ -360,6 +363,7 @@ class BattleTetris:
         if key == pygame.K_l and self.state == "paused":
             # toggle Human-vs-LLM / LLM-vs-LLM at the paused screen
             self.vs_mode = "ai" if self.vs_mode == "human" else "human"
+            self.score_left = self.score_right = 0   # new matchup, fresh scoreboard
             self.reset()
             if self.vs_mode == "ai" and not self._left_warmed:
                 self.client_left.warmup()
@@ -437,6 +441,10 @@ class BattleTetris:
         if self.player.dead or self.llm.dead:
             self.state = "over"
             self.winner = "llm" if self.player.dead else "player"
+            if self.winner == "player":
+                self.score_left += 1
+            else:
+                self.score_right += 1
 
     def render(self):
         if self.vs_mode == "ai":
@@ -462,6 +470,8 @@ class BattleTetris:
             left_status=left_status,
             left_log=left_log,
             mode_label=mode_label,
+            score_left=self.score_left,
+            score_right=self.score_right,
         )
         pygame.display.flip()
 

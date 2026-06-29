@@ -202,16 +202,24 @@ class Renderer:
 
     # -- top level ----------------------------------------------------------
     def render(self, player, llm, *, llm_status, llm_log, winner, state, model_name,
-               player_label="YOU", left_status=None, left_log=None, mode_label=None):
+               player_label="YOU", left_status=None, left_log=None, mode_label=None,
+               score_left=0, score_right=0):
         self.screen.blit(self.assets.background, (0, 0))
         left_is_ai = left_log is not None
+        left_color = C.THINK_COLOR if left_is_ai else C.TEXT
 
         # titles
-        self._text(player_label, self.f_title,
-                   C.THINK_COLOR if left_is_ai else C.TEXT,
-                   C.PLAYER_BOARD_X + C.BOARD_PX_W // 2, 30, center=True)
+        self._text(player_label, self.f_title, left_color,
+                   C.PLAYER_BOARD_X + C.BOARD_PX_W // 2, 38, center=True)
         self._text(model_name, self.f_title, C.THINK_COLOR,
-                   C.LLM_BOARD_X + C.BOARD_PX_W // 2, 30, center=True)
+                   C.LLM_BOARD_X + C.BOARD_PX_W // 2, 38, center=True)
+
+        # scoreboard (session wins), centred at the top
+        cx = C.CENTER_X
+        self._text("WINS", self.f_s, C.TEXT_DIM, cx, 6, center=True)
+        self._text(str(score_left), self.f_big, left_color, cx - 26, 18, right=True)
+        self._text("-", self.f_h, C.TEXT_DIM, cx, 30, center=True)
+        self._text(str(score_right), self.f_big, C.THINK_COLOR, cx + 26, 18)
 
         self.draw_board(C.PLAYER_BOARD_X, C.BOARD_TOP, player, active=not player.dead)
         self.draw_board(C.LLM_BOARD_X, C.BOARD_TOP, llm, active=not llm.dead)
@@ -243,8 +251,15 @@ class Renderer:
             elif winner == "llm":
                 self.banner(C.PLAYER_BOARD_X, "LOSE", C.LOSE_COLOR)
                 self.banner(C.LLM_BOARD_X, "WIN!", C.WIN_COLOR)
-            self._text("Press  R  to play again", self.f_h, C.TEXT,
-                       C.CENTER_X, C.BOARD_TOP + C.BOARD_PX_H + 4, center=True)
+            # prominent centred restart prompt
+            prompt = "press  R  to restart"
+            pw = self.f_title.size(prompt)[0] + 48
+            py = C.BOARD_TOP + C.BOARD_PX_H // 2 + 46
+            pill = pygame.Surface((pw, 44), pygame.SRCALPHA)
+            pill.fill((0, 0, 0, 205))
+            pygame.draw.rect(pill, C.ACCENT, pill.get_rect(), 1, border_radius=6)
+            self.screen.blit(pill, (C.CENTER_X - pw // 2, py))
+            self._text(prompt, self.f_title, C.ACCENT, C.CENTER_X, py + 9, center=True)
         elif state == "paused":
             self.banner(C.PLAYER_BOARD_X, "PAUSED", C.ACCENT)
             self.banner(C.LLM_BOARD_X, "PAUSED", C.ACCENT)
