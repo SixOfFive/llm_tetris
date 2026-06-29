@@ -149,17 +149,17 @@ class Renderer:
             lines.append(cur)
         return lines
 
-    def draw_reply_panel(self, llm_status, llm_log: List[str], model_name):
-        x, y, w, h = C.LLM_PANEL
-        self._panel((x, y, w, h), f"{model_name}  ·  REPLIES")
+    def draw_reply_panel(self, rect, header, status, log: List[str]):
+        x, y, w, h = rect
+        self._panel(rect, header)
         # status line
-        self._text(llm_status, self.f, C.THINK_COLOR, x + 12, y + 32)
+        self._text(status, self.f, C.THINK_COLOR, x + 12, y + 32)
         # log, newest at bottom
         line_h = 17
         area_top = y + 56
         area_bottom = y + h - 8
         rendered = []
-        for entry in reversed(llm_log):
+        for entry in reversed(log):
             for wl in reversed(self._wrap(entry, self.f_s, w - 28)):
                 rendered.append(wl)
         rendered = rendered[: max(0, (area_bottom - area_top) // line_h)]
@@ -176,9 +176,9 @@ class Renderer:
             "<-  ->   move piece",
             "Up / X   rotate clockwise",
             "Z / Ctrl rotate counter-clockwise",
-            "Down     soft drop",
-            "Space    hard drop",
+            "Down     soft drop   ·   Space  hard drop",
             "P pause   ·   R restart   ·   Esc quit",
+            "L  (while paused)  LLM vs LLM mode",
         ]
         yy = y + 38
         for ln in lines:
@@ -201,12 +201,15 @@ class Renderer:
                    C.BOARD_TOP + C.BOARD_PX_H // 2 - 26, center=True)
 
     # -- top level ----------------------------------------------------------
-    def render(self, player, llm, *, llm_status, llm_log, winner, state, model_name):
+    def render(self, player, llm, *, llm_status, llm_log, winner, state, model_name,
+               player_label="YOU", left_status=None, left_log=None, mode_label=None):
         self.screen.blit(self.assets.background, (0, 0))
+        left_is_ai = left_log is not None
 
         # titles
-        self._text("YOU", self.f_title, C.TEXT, C.PLAYER_BOARD_X + C.BOARD_PX_W // 2, 30,
-                   center=True)
+        self._text(player_label, self.f_title,
+                   C.THINK_COLOR if left_is_ai else C.TEXT,
+                   C.PLAYER_BOARD_X + C.BOARD_PX_W // 2, 30, center=True)
         self._text(model_name, self.f_title, C.THINK_COLOR,
                    C.LLM_BOARD_X + C.BOARD_PX_W // 2, 30, center=True)
 
@@ -225,8 +228,13 @@ class Renderer:
             ("PIECES", llm.pieces_placed),
         ])
 
-        self.draw_help_panel()
-        self.draw_reply_panel(llm_status, llm_log, model_name)
+        # left panel: reply log in LLM-vs-LLM mode, controls otherwise
+        if left_is_ai:
+            self.draw_reply_panel(C.PLAYER_PANEL, f"{player_label}  ·  REPLIES",
+                                  left_status or "—", left_log)
+        else:
+            self.draw_help_panel()
+        self.draw_reply_panel(C.LLM_PANEL, f"{model_name}  ·  REPLIES", llm_status, llm_log)
 
         if state == "over":
             if winner == "player":
@@ -240,5 +248,8 @@ class Renderer:
         elif state == "paused":
             self.banner(C.PLAYER_BOARD_X, "PAUSED", C.ACCENT)
             self.banner(C.LLM_BOARD_X, "PAUSED", C.ACCENT)
-            self._text("Press  P  to start / resume", self.f_h, C.TEXT,
+            hint = "Press  P  to start / resume"
+            if mode_label:
+                hint = f"{mode_label}     ·     Press  L  to switch mode     ·     P  to start"
+            self._text(hint, self.f_h, C.TEXT,
                        C.CENTER_X, C.BOARD_TOP + C.BOARD_PX_H + 4, center=True)

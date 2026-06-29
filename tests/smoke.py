@@ -170,6 +170,27 @@ def test_full_loop():
             pass
 
 
+def test_ai_vs_ai():
+    import pygame
+    from tetris.main import BattleTetris, load_config
+    cfg = load_config()
+    cfg["game"]["seed"] = 11
+    game = BattleTetris(cfg, no_llm=True, start_paused=False)
+    game.vs_mode = "ai"
+    game.reset()
+    try:
+        check("left controller created in ai mode", game.controller_left is not None)
+        game.run(max_frames=300)
+        check("AI vs AI ran 300 frames without crashing", True)
+        check("both AI boards placed pieces",
+              game.player.pieces_placed > 0 and game.llm.pieces_placed > 0)
+    finally:
+        try:
+            pygame.quit()
+        except Exception:
+            pass
+
+
 if __name__ == "__main__":
     print("== shapes =="); test_shapes()
     print("== bag =="); test_bag()
@@ -180,5 +201,6 @@ if __name__ == "__main__":
     print("== parser =="); test_parser()
     print("== attack exchange =="); test_attack_exchange()
     print("== full loop (dummy video, no network) =="); test_full_loop()
+    print("== ai vs ai loop =="); test_ai_vs_ai()
     print(f"\n{PASS} passed, {FAIL} failed")
     sys.exit(1 if FAIL else 0)

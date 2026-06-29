@@ -121,8 +121,18 @@ The game **starts paused** — press **P** to begin.
 | ↓ | soft drop |
 | **Space** | hard drop |
 | **P** | pause / unpause (and start the game) |
+| **L** | (on the paused screen) toggle **LLM vs LLM** mode |
 | R | restart |
 | Esc | quit |
+
+### Game modes
+
+On the paused start screen, press **L** to switch between:
+
+- **Human vs LLM** (default) — you play the left board, the model plays the right.
+- **LLM vs LLM** — the model plays *both* boards and battles itself; each side
+  gets its own reply panel so you can watch both trains of thought. Keyboard
+  input is disabled in this mode. Press **L** again to switch back.
 
 ---
 

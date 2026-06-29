@@ -85,6 +85,7 @@ class LLMController:
         self.llm_active = bool(client.enabled and client.base_url)
         self.recent_latency_s = 2.0 if self.llm_active else 0.5
         self.human_spp_ms = 1800.0  # human seconds-per-piece estimate (updated live)
+        self._has_human = False
         self.cadence_ms = 1800.0
         self.anim_step_ms = self.max_step_ms
         self._reset_turn()
@@ -152,6 +153,7 @@ class LLMController:
     def update(self, dt, llm: Game, player: Game, on_lock, human_spp_ms=None):
         if human_spp_ms:
             self.human_spp_ms = human_spp_ms
+            self._has_human = True
         if llm.dead or llm.current is None:
             self.status = "—"
             return
@@ -221,9 +223,10 @@ class LLMController:
         self.anim_step_ms = max(self.min_step_ms, min(self.max_step_ms, self.cadence_ms / steps))
 
     def _human_pace_note(self):
-        spp = self.human_spp_ms / 1000.0
         cad = self.cadence_ms / 1000.0
-        return f"you ~{spp:.1f}s/pc · AI {cad:.1f}s/pc"
+        if self._has_human:
+            return f"you ~{self.human_spp_ms / 1000.0:.1f}s/pc · AI {cad:.1f}s/pc"
+        return f"pace {cad:.1f}s/pc"
 
     def _animate(self, dt, llm, player, on_lock):
         tp = self.decided["placement"]
@@ -286,8 +289,15 @@ class BattleTetris:
         llm_cfg = dict(cfg.get("llm", {}))
         if no_llm:
             llm_cfg["enabled"] = False
-        self.client = LLMClient(llm_cfg, garbage_multiplier=cfg["game"]["garbage_multiplier"])
-        self.model_name = llm_cfg.get("model", "LLM") if not no_llm else "Heuristic AI"
+        gm = cfg["game"]["garbage_multiplier"]
+        # Two clients: the right board always; the left board only in LLM-vs-LLM
+        # mode (a separate client so their requests never clobber each other).
+        self.client = LLMClient(llm_cfg, garbage_multiplier=gm)
+        self.client_left = LLMClient(llm_cfg, garbage_multiplier=gm)
+        base_name = llm_cfg.get("model", "LLM") if not no_llm else "Heuristic AI"
+        self.model_name = base_name
+        self.vs_mode = "human"          # "human" | "ai"
+        self._left_warmed = False
 
         pygame.init()
         pygame.display.set_caption("Tetris Duel  ·  You vs LLM")
@@ -312,6 +322,8 @@ class BattleTetris:
         self.player.start()
         self.llm.start()
         self.controller = LLMController(self.client, g)
+        self.controller_left = (LLMController(self.client_left, g)
+                                if self.vs_mode == "ai" else None)
         self.state = "paused" if self.start_paused else "playing"   # playing | paused | over
         self.winner = None
         self.move_dir = 0
@@ -345,8 +357,18 @@ class BattleTetris:
         if key == pygame.K_r:
             self.reset()
             return True
+        if key == pygame.K_l and self.state == "paused":
+            # toggle Human-vs-LLM / LLM-vs-LLM at the paused screen
+            self.vs_mode = "ai" if self.vs_mode == "human" else "human"
+            self.reset()
+            if self.vs_mode == "ai" and not self._left_warmed:
+                self.client_left.warmup()
+                self._left_warmed = True
+            return True
         if self.state != "playing" or self.player.dead:
             return True
+        if self.vs_mode == "ai":
+            return True             # no keyboard control in LLM vs LLM
 
         if key == pygame.K_LEFT:
             self.player.move(-1)
@@ -392,33 +414,54 @@ class BattleTetris:
 
     # -- main loop ----------------------------------------------------------
     def step(self, dt):
-        if self.state == "playing":
-            self.elapsed_ms += dt
+        if self.state != "playing":
+            return
+        self.elapsed_ms += dt
+
+        if self.vs_mode == "ai":
+            # both boards LLM-driven; neither tempo-matches a human
+            self.controller_left.update(dt, self.player, self.llm, self.on_lock)
+            self.controller.update(dt, self.llm, self.player, self.on_lock)
+        else:
             keys = pygame.key.get_pressed()
             soft = keys[pygame.K_DOWN]
             self._das(dt)
-
             res = self.player.update(dt, soft)
             if res is not None:
                 self.on_lock(self.player, self.llm, res)
                 self._record_player_lock()
                 self.player.spawn()
-
             self.controller.update(dt, self.llm, self.player, self.on_lock,
                                    human_spp_ms=self.human_spp_ms)
 
-            if self.player.dead or self.llm.dead:
-                self.state = "over"
-                self.winner = "llm" if self.player.dead else "player"
+        if self.player.dead or self.llm.dead:
+            self.state = "over"
+            self.winner = "llm" if self.player.dead else "player"
 
     def render(self):
+        if self.vs_mode == "ai":
+            player_label = f"{self.model_name}  (A)"
+            right_label = f"{self.model_name}  (B)"
+            left_status = self.controller_left.status if self.controller_left else "—"
+            left_log = self.controller_left.log if self.controller_left else []
+            mode_label = "Mode: LLM vs LLM"
+        else:
+            player_label = "YOU"
+            right_label = self.model_name
+            left_status = None
+            left_log = None
+            mode_label = "Mode: Human vs LLM"
         self.renderer.render(
             self.player, self.llm,
             llm_status=self.controller.status,
             llm_log=self.controller.log,
             winner=self.winner,
             state=self.state,
-            model_name=self.model_name,
+            model_name=right_label,
+            player_label=player_label,
+            left_status=left_status,
+            left_log=left_log,
+            mode_label=mode_label,
         )
         pygame.display.flip()
 
@@ -442,6 +485,7 @@ class BattleTetris:
                     running = False
         finally:
             self.client.shutdown()
+            self.client_left.shutdown()
             pygame.quit()
 
 

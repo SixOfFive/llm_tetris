@@ -45,12 +45,13 @@ def test_real_llm():
     return res.source == "llm"
 
 
-def capture(use_llm, frames, out):
+def capture(use_llm, frames, out, ai=False):
     cfg = load_config()
     cfg["game"]["seed"] = 3
-    if not use_llm:
-        cfg["game"]["llm_min_think_ms"] = 0
     game = BattleTetris(cfg, no_llm=not use_llm, start_paused=False)
+    if ai:
+        game.vs_mode = "ai"
+        game.reset()
     clock = pygame.time.Clock()
     think_frames = place_frames = 0
     for _ in range(frames):
@@ -64,9 +65,9 @@ def capture(use_llm, frames, out):
             place_frames += 1
     pygame.image.save(game.screen, out)
     print(f"[capture] saved {out}  "
-          f"(player pieces={game.player.pieces_placed}, llm pieces={game.llm.pieces_placed}, "
-          f"state={game.state})")
-    if use_llm:
+          f"(left pieces={game.player.pieces_placed}, right pieces={game.llm.pieces_placed}, "
+          f"mode={game.vs_mode}, state={game.state})")
+    if use_llm and not ai:
         tot = think_frames + place_frames or 1
         print(f"[pipeline] thinking frames={think_frames} ({100*think_frames//tot}%)  "
               f"placing/animating frames={place_frames} ({100*place_frames//tot}%)")
@@ -74,16 +75,20 @@ def capture(use_llm, frames, out):
         for line in game.controller.log[-8:]:
             print("   " + line)
     game.client.shutdown()
+    game.client_left.shutdown()
     pygame.quit()
 
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--llm", action="store_true")
+    ap.add_argument("--ai", action="store_true", help="LLM vs LLM mode")
     ap.add_argument("--frames", type=int, default=220)
     args = ap.parse_args()
 
-    if args.llm:
+    if args.ai:
+        capture(args.llm, args.frames, os.path.join(ROOT, "preview_ai.png"), ai=True)
+    elif args.llm:
         ok = test_real_llm()
         print(f"[llm] functional test {'PASS' if ok else 'FAIL'}")
         capture(True, args.frames, os.path.join(ROOT, "preview_llm.png"))
