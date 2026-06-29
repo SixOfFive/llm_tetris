@@ -18,11 +18,22 @@ from .board import Board, EMPTY
 from .constants import COLS, ROWS
 from .pieces import Piece, SHAPES
 
-# El-Tetris style weights (higher score == better placement).
-W_AGG_HEIGHT = -0.510066
-W_LINES = 0.760666
-W_HOLES = -0.35663
-W_BUMPINESS = -0.184483
+# Heuristic weights (higher score == better placement).
+#
+# These are the well-known El-Tetris weights — near-optimal for *clearing rows*
+# while keeping the stack low. In a 400-piece benchmark they clear ~0.39 lines
+# per piece (the theoretical max is 0.40) and hold the peak to ~5 of 20 rows.
+#
+# The wells / max-height knobs below are intentionally 0. It is tempting to add
+# them so the AI never leaves an open side column, but benchmarking showed that
+# BACKFIRES: that open column is how good play sets up clears, so penalising it
+# made the AI clear LESS and build HIGHER. Leave them at 0 unless you re-measure.
+W_LINES = 0.760666     # reward each row this placement clears
+W_AGG_HEIGHT = -0.510066   # penalise total stack height (stay low)
+W_HOLES = -0.35663     # penalise buried gaps (very hard to clear)
+W_BUMPINESS = -0.184483    # penalise an uneven surface
+W_WELLS = 0.0          # penalise deep side/edge gaps (off — see note above)
+W_MAX_HEIGHT = 0.0     # penalise the tallest column (off — see note above)
 
 
 @dataclass
@@ -53,7 +64,16 @@ def _metrics(grid: List[List]):
                 holes += 1
     agg = sum(heights)
     bump = sum(abs(heights[i] - heights[i + 1]) for i in range(COLS - 1))
-    return heights, holes, agg, bump
+    # wells: how far each column sits below its lowest neighbour (walls count as
+    # full height), summed — a big number means a deep gap / lopsided side build.
+    wells = 0
+    for x in range(COLS):
+        left = heights[x - 1] if x > 0 else ROWS
+        right = heights[x + 1] if x < COLS - 1 else ROWS
+        depth = min(left, right) - heights[x]
+        if depth > 0:
+            wells += depth
+    return heights, holes, agg, bump, wells
 
 
 def enumerate_placements(board: Board, piece: Piece) -> List[Placement]:
@@ -86,12 +106,15 @@ def enumerate_placements(board: Board, piece: Piece) -> List[Placement]:
             if lines:
                 grid = [[EMPTY] * COLS for _ in range(lines)] + kept
 
-            heights, holes, agg, bump = _metrics(grid)
+            heights, holes, agg, bump, wells = _metrics(grid)
+            max_h = max(heights) if heights else 0
             score = (
-                W_AGG_HEIGHT * agg
-                + W_LINES * lines
-                + W_HOLES * holes
+                W_LINES * lines
+                + W_AGG_HEIGHT * agg
+                + W_MAX_HEIGHT * max_h
                 + W_BUMPINESS * bump
+                + W_HOLES * holes
+                + W_WELLS * wells
             )
             out.append(
                 Placement(

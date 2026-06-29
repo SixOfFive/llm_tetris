@@ -136,12 +136,16 @@ class LLMClient:
             "(each solid except one gap). Clearing multiple lines at once hits harder.\n"
             "SURVIVAL RULE: if your stack reaches the top you LOSE. Holes (empty "
             "cells trapped under blocks) are very hard to clear.\n"
-            "GOAL: keep your board as close to EMPTY as possible. Take any line "
-            "clear you can (prefer higher 'clears'), never add holes, and keep "
-            "the stack low and flat. If garbage is incoming, favour survival.\n"
+            "PRIME DIRECTIVE: CLEAR ROWS and keep your stack LOW. Your #1 job is "
+            "to complete and clear rows as often as possible — if any option "
+            "clears one or more lines, strongly prefer it (more 'clears' is "
+            "better). Keep the overall stack as low as you can; do not build tall "
+            "towers, and never bury holes under blocks. (Keeping one column open "
+            "to set up a clear is fine — just don't pile up.)\n"
             "You get a numbered MENU of strong placements (best candidates first) "
-            "with each option's outcome. Choose the option number that best "
-            "matches the goal above.\n"
+            "with each option's outcome (clears / holes_after / max_height). "
+            "Pick the option that clears the most rows while keeping max_height "
+            "low and holes_after at 0.\n"
             'Reply with ONLY one JSON object: {"id": <option number>, "reason": '
             '"<=10 words"}. No other text.' + suffix
         )
