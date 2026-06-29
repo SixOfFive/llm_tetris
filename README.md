@@ -65,7 +65,6 @@ This isn't "Tetris with a bot." A few things set it apart:
 ```bash
 git clone https://github.com/SixOfFive/llm_tetris.git
 cd llm_tetris
-pip install -r requirements.txt
 
 # Create your local config from the example, then edit it:
 copy config.example.json config.json      # Windows
@@ -79,17 +78,29 @@ stays on your machine.
 > If you skip making a `config.json`, the game falls back to
 > `config.example.json` (which points at `http://localhost:11434/v1`).
 
+You do **not** need to install dependencies by hand on Windows — `play.bat`
+does it for you (see below). For the manual / cross-platform route:
+
+```bash
+pip install -r requirements.txt
+```
+
 ---
 
 ## Run
 
-**Windows:** double-click **`play.bat`**, or from a terminal:
+**Windows — just double-click `play.bat`.** On the first run it creates a local
+virtual environment (`.venv`), installs the dependencies into it, and launches
+the game. Later runs reuse the environment and start immediately. (Requires
+Python 3 on your PATH; nothing else to set up.)
+
+**Any platform / terminal:**
 
 ```bash
 python run.py
 ```
 
-Useful flags:
+Useful flags (work with `play.bat` too, e.g. `play.bat --no-llm`):
 
 ```bash
 python run.py --no-llm        # opponent uses the built-in heuristic (no network)
