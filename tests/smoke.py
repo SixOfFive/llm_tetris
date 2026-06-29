@@ -191,6 +191,31 @@ def test_ai_vs_ai():
             pass
 
 
+def test_continuous_restart():
+    import pygame
+    from tetris.main import BattleTetris, load_config
+    cfg = load_config()
+    cfg["game"]["seed"] = 9
+    game = BattleTetris(cfg, no_llm=True, ai=True, continuous=True)
+    try:
+        check("continuous mode starts unpaused", game.state == "playing")
+        # force a game over and confirm it auto-restarts (without pausing)
+        game.player.dead = True
+        game.step(16)
+        check("game over recorded", game.state == "over")
+        won = game.score_right
+        check("win tallied", won >= 1)
+        for _ in range(180):       # > CONTINUOUS_RESTART_MS of game time
+            game.step(20)
+        check("auto-restarted to playing (no pause)", game.state == "playing")
+        check("scoreboard persisted across auto-restart", game.score_right >= won)
+    finally:
+        try:
+            pygame.quit()
+        except Exception:
+            pass
+
+
 if __name__ == "__main__":
     print("== shapes =="); test_shapes()
     print("== bag =="); test_bag()
@@ -202,5 +227,6 @@ if __name__ == "__main__":
     print("== attack exchange =="); test_attack_exchange()
     print("== full loop (dummy video, no network) =="); test_full_loop()
     print("== ai vs ai loop =="); test_ai_vs_ai()
+    print("== continuous auto-restart =="); test_continuous_restart()
     print(f"\n{PASS} passed, {FAIL} failed")
     sys.exit(1 if FAIL else 0)

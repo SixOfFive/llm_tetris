@@ -40,6 +40,11 @@ This isn't "Tetris with a bot." A few things set it apart:
   narrating its own moves in its own panel.
 - **It's a match, not a round.** A running **wins scoreboard** sits at the top
   and survives restarts, so you can settle it over many games.
+- **Runs unattended (continuous mode).** Auto-restarts each game with no pause.
+  Point it at **LLM vs LLM** and you get a self-running display — a demo loop, a
+  lobby/kiosk screen, a stream backdrop, or just an idle-desktop spectacle — that
+  plays forever while the scoreboard climbs. One command:
+  `play.bat --ai --continuous`.
 - **Works with any small local model.** The opponent runs against any
   OpenAI-compatible endpoint. The menu is presented best-candidate-first, so even
   a tiny 0.5B model plays a clean board. If the model ever stalls or replies with
@@ -108,11 +113,14 @@ python run.py
 Useful flags (work with `play.bat` too, e.g. `play.bat --no-llm`):
 
 ```bash
-python run.py --no-llm        # opponent uses the built-in heuristic (no network)
-python run.py --regen-assets  # regenerate the PNG art before starting
+python run.py --no-llm           # opponent uses the built-in heuristic (no network)
+python run.py --ai               # start in LLM vs LLM mode
+python run.py --ai --continuous  # always-running LLM vs LLM (kiosk/demo) — never pauses
+python run.py --regen-assets     # regenerate the PNG art before starting
 ```
 
-The game **starts paused** — press **P** to begin.
+The game **starts paused** — press **P** to begin (except `--continuous`, which
+starts immediately and keeps restarting on its own).
 
 ---
 
@@ -127,6 +135,7 @@ The game **starts paused** — press **P** to begin.
 | **Space** | hard drop |
 | **P** | pause / unpause (and start the game) |
 | **L** | (on the paused screen) toggle **LLM vs LLM** mode |
+| **C** | toggle **continuous** mode (auto-restart each game) |
 | R | restart |
 | Esc | quit |
 
@@ -146,6 +155,24 @@ side (colour-matched to the two boards). When a game ends, a prominent
 **“press R to restart”** prompt appears; restarting **keeps the score**, so you
 can play a long match across many rounds. Switching mode with **L** starts a
 fresh scoreboard.
+
+### Continuous (kiosk) mode
+
+Press **C** (any time) to toggle **continuous** mode — a green “● CONTINUOUS”
+badge shows when it's on. In continuous mode, when a game ends the result is held
+briefly and then the game **auto-restarts with no pause**, scoreboard intact.
+
+Combine it with **LLM vs LLM** for a hands-off, always-running match. Launch
+straight into it from the command line:
+
+```bash
+play.bat --ai --continuous        # Windows
+python run.py --ai --continuous   # any platform
+```
+
+Handy as a demo loop, an idle "attract" screen, a lobby/kiosk display, or a
+stream backdrop — the two models trade rounds indefinitely while the wins tally
+climbs.
 
 ---
 
@@ -225,7 +252,7 @@ tetris/
   renderer.py     draws boards, HUDs, reply panel, overlays
   main.py         game loop, input/DAS, modes + scoreboard, LLM controller (pipeline + tempo)
 generate_assets.py    procedural Pillow art (auto-runs on first launch)
-tests/smoke.py        headless logic checks (118 assertions, no window/network)
+tests/smoke.py        headless logic checks (123 assertions, no window/network)
 tests/capture.py      headless screenshot + live-LLM functional test
 config.example.json   template config (copy to config.json)
 play.bat              double-click launcher (Windows)

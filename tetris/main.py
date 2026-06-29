@@ -19,6 +19,7 @@ from .pieces import SPAWN_Y, Piece
 
 DAS_DELAY = 150     # ms before auto-repeat kicks in
 ARR = 40            # ms between auto-repeat moves
+CONTINUOUS_RESTART_MS = 2500   # game-over hold before auto-restart in continuous mode
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -280,8 +281,11 @@ class LLMController:
 
 
 class BattleTetris:
-    def __init__(self, cfg, no_llm=False, start_paused=True):
+    def __init__(self, cfg, no_llm=False, start_paused=True, ai=False, continuous=False):
         self.cfg = cfg
+        self.continuous = continuous    # auto-restart each game (kiosk mode)
+        if continuous:
+            start_paused = False        # kiosk: begin immediately
         self.start_paused = start_paused
         seed = cfg["game"].get("seed")
         self.rng = random.Random(seed) if seed is not None else random.Random()
@@ -296,11 +300,12 @@ class BattleTetris:
         self.client_left = LLMClient(llm_cfg, garbage_multiplier=gm)
         base_name = llm_cfg.get("model", "LLM") if not no_llm else "Heuristic AI"
         self.model_name = base_name
-        self.vs_mode = "human"          # "human" | "ai"
+        self.vs_mode = "ai" if ai else "human"      # "human" | "ai"
         self._left_warmed = False
         # session scoreboard (survives restarts; reset on a mode switch)
         self.score_left = 0
         self.score_right = 0
+        self.over_timer = 0.0           # time spent on the game-over screen
 
         pygame.init()
         pygame.display.set_caption("Tetris Duel  ·  You vs LLM")
@@ -314,6 +319,9 @@ class BattleTetris:
 
         self.reset()
         self.client.warmup()
+        if self.vs_mode == "ai":
+            self.client_left.warmup()
+            self._left_warmed = True
 
     def reset(self):
         g = self.cfg["game"]
@@ -359,6 +367,9 @@ class BattleTetris:
             return True
         if key == pygame.K_r:
             self.reset()
+            return True
+        if key == pygame.K_c:
+            self.continuous = not self.continuous   # auto-restart each game
             return True
         if key == pygame.K_l and self.state == "paused":
             # toggle Human-vs-LLM / LLM-vs-LLM at the paused screen
@@ -418,6 +429,12 @@ class BattleTetris:
 
     # -- main loop ----------------------------------------------------------
     def step(self, dt):
+        if self.state == "over" and self.continuous:
+            self.over_timer += dt
+            if self.over_timer >= CONTINUOUS_RESTART_MS:
+                self.reset()
+                self.state = "playing"      # don't pause between games in kiosk mode
+            return
         if self.state != "playing":
             return
         self.elapsed_ms += dt
@@ -440,6 +457,7 @@ class BattleTetris:
 
         if self.player.dead or self.llm.dead:
             self.state = "over"
+            self.over_timer = 0.0
             self.winner = "llm" if self.player.dead else "player"
             if self.winner == "player":
                 self.score_left += 1
@@ -472,6 +490,7 @@ class BattleTetris:
             mode_label=mode_label,
             score_left=self.score_left,
             score_right=self.score_right,
+            continuous=self.continuous,
         )
         pygame.display.flip()
 
@@ -507,6 +526,11 @@ def main(argv=None):
                         help="regenerate image assets before starting")
     parser.add_argument("--frames", type=int, default=None,
                         help="run N frames then exit (headless self-test)")
+    parser.add_argument("--ai", action="store_true",
+                        help="start in LLM vs LLM mode (the model plays both boards)")
+    parser.add_argument("--continuous", action="store_true",
+                        help="kiosk mode: start playing and auto-restart each game "
+                             "(great with --ai for an always-running LLM vs LLM display)")
     args = parser.parse_args(argv)
 
     if args.regen_assets:
@@ -514,7 +538,7 @@ def main(argv=None):
         ensure_assets(force=True)
 
     cfg = load_config()
-    game = BattleTetris(cfg, no_llm=args.no_llm)
+    game = BattleTetris(cfg, no_llm=args.no_llm, ai=args.ai, continuous=args.continuous)
     game.run(max_frames=args.frames)
     return 0
 

@@ -178,7 +178,7 @@ class Renderer:
             "Z / Ctrl rotate counter-clockwise",
             "Down     soft drop   ·   Space  hard drop",
             "P pause   ·   R restart   ·   Esc quit",
-            "L  (while paused)  LLM vs LLM mode",
+            "L  LLM vs LLM   ·   C  continuous (auto-restart)",
         ]
         yy = y + 38
         for ln in lines:
@@ -203,7 +203,7 @@ class Renderer:
     # -- top level ----------------------------------------------------------
     def render(self, player, llm, *, llm_status, llm_log, winner, state, model_name,
                player_label="YOU", left_status=None, left_log=None, mode_label=None,
-               score_left=0, score_right=0):
+               score_left=0, score_right=0, continuous=False):
         self.screen.blit(self.assets.background, (0, 0))
         left_is_ai = left_log is not None
         left_color = C.THINK_COLOR if left_is_ai else C.TEXT
@@ -213,6 +213,11 @@ class Renderer:
                    C.PLAYER_BOARD_X + C.BOARD_PX_W // 2, 38, center=True)
         self._text(model_name, self.f_title, C.THINK_COLOR,
                    C.LLM_BOARD_X + C.BOARD_PX_W // 2, 38, center=True)
+
+        # continuous (kiosk) indicator, top-left
+        if continuous:
+            pygame.draw.circle(self.screen, C.WIN_COLOR, (C.MARGIN + 5, 18), 5)
+            self._text("CONTINUOUS", self.f_h, C.WIN_COLOR, C.MARGIN + 16, 9)
 
         # scoreboard (session wins), centred at the top
         cx = C.CENTER_X
@@ -251,20 +256,23 @@ class Renderer:
             elif winner == "llm":
                 self.banner(C.PLAYER_BOARD_X, "LOSE", C.LOSE_COLOR)
                 self.banner(C.LLM_BOARD_X, "WIN!", C.WIN_COLOR)
-            # prominent centred restart prompt
-            prompt = "press  R  to restart"
+            # prominent centred prompt — auto-restart in continuous mode
+            prompt = "continuous  —  restarting…" if continuous else "press  R  to restart"
+            color = C.WIN_COLOR if continuous else C.ACCENT
             pw = self.f_title.size(prompt)[0] + 48
             py = C.BOARD_TOP + C.BOARD_PX_H // 2 + 46
             pill = pygame.Surface((pw, 44), pygame.SRCALPHA)
             pill.fill((0, 0, 0, 205))
-            pygame.draw.rect(pill, C.ACCENT, pill.get_rect(), 1, border_radius=6)
+            pygame.draw.rect(pill, color, pill.get_rect(), 1, border_radius=6)
             self.screen.blit(pill, (C.CENTER_X - pw // 2, py))
-            self._text(prompt, self.f_title, C.ACCENT, C.CENTER_X, py + 9, center=True)
+            self._text(prompt, self.f_title, color, C.CENTER_X, py + 9, center=True)
         elif state == "paused":
             self.banner(C.PLAYER_BOARD_X, "PAUSED", C.ACCENT)
             self.banner(C.LLM_BOARD_X, "PAUSED", C.ACCENT)
+            cont = "ON" if continuous else "off"
             hint = "Press  P  to start / resume"
             if mode_label:
-                hint = f"{mode_label}     ·     Press  L  to switch mode     ·     P  to start"
+                hint = (f"{mode_label}   ·   L: switch mode   ·   "
+                        f"C: continuous [{cont}]   ·   P: start")
             self._text(hint, self.f_h, C.TEXT,
                        C.CENTER_X, C.BOARD_TOP + C.BOARD_PX_H + 4, center=True)
