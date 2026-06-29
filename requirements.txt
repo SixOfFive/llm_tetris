@@ -1,0 +1,4 @@
+# Python 3.14 compatible. pygame-ce ships 3.14 wheels (classic pygame does not yet).
+pygame-ce>=2.5
+pillow>=10
+requests>=2.28

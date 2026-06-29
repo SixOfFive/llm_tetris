@@ -1,0 +1,24 @@
+{
+  "_comment": "Copy this file to config.json and edit it. config.json is git-ignored so your endpoint stays local. Any OpenAI-compatible chat endpoint works (Ollama, LM Studio, vLLM, OpenRouter, etc.).",
+  "llm": {
+    "enabled": true,
+    "base_url": "http://localhost:11434/v1",
+    "model": "qwen2.5:0.5b",
+    "api_key": "not-needed",
+    "temperature": 0.2,
+    "max_tokens": 220,
+    "timeout_seconds": 12.0,
+    "disable_thinking": false
+  },
+  "game": {
+    "player_gravity_ms": 800,
+    "soft_drop_ms": 40,
+    "lock_delay_ms": 500,
+    "llm_anim_min_step_ms": 22,
+    "llm_anim_max_step_ms": 240,
+    "llm_speed_factor": 1.15,
+    "llm_max_cadence_ms": 6000,
+    "garbage_multiplier": 2,
+    "seed": null
+  }
+}

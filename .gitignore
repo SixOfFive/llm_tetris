@@ -1,0 +1,25 @@
+# Local config — contains YOUR endpoint. Copy config.example.json -> config.json.
+config.json
+
+# Generated art (recreated on first run by generate_assets.py)
+assets/
+
+# Test/capture artifacts
+preview_*.png
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
