@@ -146,7 +146,8 @@ class LLMController:
             sim.clear_full_rows()
         for lines, gap in llm.incoming:            # garbage applied before next spawn
             sim.add_garbage(lines, gap)
-        self.client.request_move(sim, Piece(llm.next_name), "?", llm.incoming_count())
+        self.client.request_move(sim, Piece(llm.next_name), llm.next_next_name,
+                                 llm.incoming_count())
         self.pending = True
         self.pending_result = None
 
@@ -213,7 +214,9 @@ class LLMController:
 
         # Floor: we must have the *next* decision ready by the time we lock.
         floor = (self.recent_latency_s * 1000.0 + 150.0) if self.llm_active else 250.0
-        desired = (self.human_spp_ms / self.speed_factor) if self.human_spp_ms else floor
+        # Match a human's drop pace if one is playing; otherwise (LLM vs LLM)
+        # just play at the model's natural speed.
+        desired = (self.human_spp_ms / self.speed_factor) if self._has_human else floor
         self.cadence_ms = max(floor, min(self.max_cadence_ms, desired))
 
         if tp is None or p is None:

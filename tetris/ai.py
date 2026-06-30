@@ -47,7 +47,8 @@ class Placement:
     max_height: int     # tallest column afterward
     bumpiness: int
     agg_height: int
-    score: float
+    score: float        # 1-ply score: this placement only
+    lookahead: float = 0.0   # 2-ply score: this placement + best next placement
 
 
 def _metrics(grid: List[List]):
@@ -76,8 +77,32 @@ def _metrics(grid: List[List]):
     return heights, holes, agg, bump, wells
 
 
+def _static_eval(grid: List[List]):
+    """Board-shape score (everything except the line-clear reward) plus the
+    metrics used to describe a placement."""
+    heights, holes, agg, bump, wells = _metrics(grid)
+    max_h = max(heights) if heights else 0
+    shape = (W_AGG_HEIGHT * agg + W_MAX_HEIGHT * max_h
+             + W_BUMPINESS * bump + W_HOLES * holes + W_WELLS * wells)
+    return shape, holes, max_h, bump, agg
+
+
+def _drop_and_clear(base: List[List], piece: Piece, rot: int, px: int, py: int):
+    """Lock the piece into a copy of ``base`` and clear full rows.
+    Returns (lines_cleared, resulting_grid)."""
+    grid = [row[:] for row in base]
+    for (x, y) in piece.cells(rot, px, py):
+        if 0 <= y < ROWS and 0 <= x < COLS:
+            grid[y][x] = piece.name
+    kept = [row for row in grid if any(c == EMPTY for c in row)]
+    lines = ROWS - len(kept)
+    if lines:
+        grid = [[EMPTY] * COLS for _ in range(lines)] + kept
+    return lines, grid
+
+
 def enumerate_placements(board: Board, piece: Piece) -> List[Placement]:
-    """All distinct legal hard-drop placements, scored and de-duplicated."""
+    """All distinct legal hard-drop placements, scored (1-ply) and de-duplicated."""
     out: List[Placement] = []
     seen_cells = set()
     base = board.snapshot()
@@ -97,43 +122,62 @@ def enumerate_placements(board: Board, piece: Piece) -> List[Placement]:
                 continue
             seen_cells.add(key)
 
-            # Simulate the lock + line clear on a scratch grid.
-            grid = [row[:] for row in base]
-            for (x, y) in cells:
-                grid[y][x] = piece.name
-            kept = [row for row in grid if any(c == EMPTY for c in row)]
-            lines = ROWS - len(kept)
-            if lines:
-                grid = [[EMPTY] * COLS for _ in range(lines)] + kept
-
-            heights, holes, agg, bump, wells = _metrics(grid)
-            max_h = max(heights) if heights else 0
-            score = (
-                W_LINES * lines
-                + W_AGG_HEIGHT * agg
-                + W_MAX_HEIGHT * max_h
-                + W_BUMPINESS * bump
-                + W_HOLES * holes
-                + W_WELLS * wells
-            )
+            lines, grid = _drop_and_clear(base, piece, rot, px, py)
+            shape_score, holes, max_h, bump, agg = _static_eval(grid)
+            score = W_LINES * lines + shape_score
             out.append(
                 Placement(
-                    id=len(out),
-                    rot=rot,
-                    px=px,
-                    py=py,
-                    lines=lines,
-                    holes_after=holes,
-                    max_height=max(heights) if heights else 0,
-                    bumpiness=bump,
-                    agg_height=agg,
-                    score=score,
+                    id=len(out), rot=rot, px=px, py=py, lines=lines,
+                    holes_after=holes, max_height=max_h, bumpiness=bump,
+                    agg_height=agg, score=score, lookahead=score,
                 )
             )
     return out
 
 
+def _best_reachable_score(board: Board, piece: Piece) -> float:
+    """Best 1-ply score obtainable by placing ``piece`` anywhere on ``board`` —
+    the second ply of the lookahead. A large penalty means it can't be placed
+    (a top-out), which the lookahead should avoid."""
+    base = board.snapshot()
+    best = None
+    for rot in range(4):
+        shape = SHAPES[piece.name][rot]
+        min_x = min(c[0] for c in shape)
+        max_x = max(c[0] for c in shape)
+        for px in range(-min_x, COLS - max_x):
+            py = board.drop_py(piece, rot, px)
+            cells = piece.cells(rot, px, py)
+            if board.collides(cells) or any(y < 0 for (_, y) in cells):
+                continue
+            lines, grid = _drop_and_clear(base, piece, rot, px, py)
+            s = W_LINES * lines + _static_eval(grid)[0]
+            if best is None or s > best:
+                best = s
+    return best if best is not None else -1e9
+
+
+def compute_lookahead(board: Board, piece: Piece, placements: List[Placement],
+                      next_name) -> List[Placement]:
+    """Fill each placement's 2-ply ``lookahead``: the immediate line reward plus
+    the best score reachable by then placing the next piece. This makes the AI
+    set up clears with the current piece. With no known next piece, ``lookahead``
+    stays equal to the 1-ply score."""
+    if not next_name or next_name not in SHAPES or not placements:
+        return placements
+    next_piece = Piece(next_name)
+    base = board.snapshot()
+    for pl in placements:
+        _, grid = _drop_and_clear(base, piece, pl.rot, pl.px, pl.py)
+        nxt = Board()
+        nxt.grid = grid
+        pl.lookahead = W_LINES * pl.lines + _best_reachable_score(nxt, next_piece)
+    return placements
+
+
 def best_placement(placements: List[Placement]) -> Placement | None:
+    """Best placement by 2-ply lookahead (equals the 1-ply score until
+    ``compute_lookahead`` has been run)."""
     if not placements:
         return None
-    return max(placements, key=lambda p: p.score)
+    return max(placements, key=lambda p: p.lookahead)

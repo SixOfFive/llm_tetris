@@ -36,7 +36,8 @@ class Game:
 
         self.bag = BagRandomizer(rng)
         self.current: Optional[Piece] = None
-        self.next_name: str = self.bag.next()
+        self.next_name: str = self.bag.next()        # the upcoming piece
+        self.next_next_name: str = self.bag.next()   # the one after (for 2-ply lookahead)
         self.dead = False
 
         self.lines_cleared = 0
@@ -81,7 +82,8 @@ class Game:
             self.current = None
             return
         piece = Piece(self.next_name)
-        self.next_name = self.bag.next()
+        self.next_name = self.next_next_name
+        self.next_next_name = self.bag.next()
         self._fall_acc = 0.0
         self._lock_acc = 0.0
         if self.board.collides(piece.cells()):

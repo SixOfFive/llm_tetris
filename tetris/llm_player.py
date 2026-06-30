@@ -19,7 +19,7 @@ from typing import List, Optional
 
 import requests
 
-from .ai import Placement, best_placement, enumerate_placements
+from .ai import Placement, best_placement, compute_lookahead, enumerate_placements
 from .board import Board, EMPTY, GARBAGE
 from .constants import COLS, ROWS
 from .pieces import Piece
@@ -96,19 +96,25 @@ class LLMClient:
 
     # -- internals ----------------------------------------------------------
     def _compute(self, board, piece, next_name, incoming, placements) -> MoveResult:
+        t0 = time.monotonic()
+        # 2-ply lookahead: rank each placement by the best board reachable after
+        # also placing the next piece. This sets up clears and keeps the stack
+        # much lower. Runs here in the worker thread, off the game loop. (Timed
+        # into the latency so the placement cadence accounts for it.)
+        compute_lookahead(board, piece, placements, next_name)
         fallback = best_placement(placements)
         if not placements:
-            return MoveResult(fallback, "no legal move", "fallback", "", 0.0)
+            return MoveResult(fallback, "no legal move", "fallback", "", time.monotonic() - t0)
 
         if not (self.enabled and self.base_url):
-            return MoveResult(fallback, "heuristic (LLM off)", "fallback", "", 0.0)
+            return MoveResult(fallback, "heuristic (LLM off)", "fallback", "",
+                              time.monotonic() - t0)
 
         # Present only the strongest options, ranked best-first and numbered
         # 0..N.  Even a tiny model that just blurts a small number then lands on
         # a good move, while a capable model can still weigh the outcomes.
-        menu = sorted(placements, key=lambda p: p.score, reverse=True)[:MENU_LIMIT]
+        menu = sorted(placements, key=lambda p: p.lookahead, reverse=True)[:MENU_LIMIT]
         system, user = self._build_prompt(board, piece, next_name, incoming, menu)
-        t0 = time.monotonic()
         try:
             raw = self._safe_chat(system, user, self.max_tokens)
         except Exception as exc:
