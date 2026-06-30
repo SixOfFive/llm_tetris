@@ -128,12 +128,18 @@ class LLMClient:
     def _build_prompt(self, board, piece, next_name, incoming, menu):
         mult = self.garbage_multiplier
         suffix = " /no_think" if self.disable_thinking else ""
+        attack_rule = ""
+        if mult > 0:
+            attack_rule = (
+                "ATTACK RULE: when you clear N lines at once, the opponent receives "
+                f"N x {mult} garbage lines pushed up from the bottom of THEIR board "
+                "(each solid except one gap). Clearing multiple lines at once hits "
+                "harder.\n"
+            )
         system = (
             "You are an expert Tetris AI. You control the RIGHT board in a duel "
-            "against a human on the LEFT.\n"
-            "ATTACK RULE: when you clear N lines at once, the human receives "
-            f"N x {mult} garbage lines pushed up from the bottom of THEIR board "
-            "(each solid except one gap). Clearing multiple lines at once hits harder.\n"
+            "against an opponent on the LEFT.\n"
+            + attack_rule +
             "SURVIVAL RULE: if your stack reaches the top you LOSE. Holes (empty "
             "cells trapped under blocks) are very hard to clear.\n"
             "PRIME DIRECTIVE: CLEAR ROWS and keep your stack LOW. Your #1 job is "

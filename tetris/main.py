@@ -283,9 +283,7 @@ class LLMController:
 class BattleTetris:
     def __init__(self, cfg, no_llm=False, start_paused=True, ai=False, continuous=False):
         self.cfg = cfg
-        self.continuous = continuous    # auto-restart each game (kiosk mode)
-        if continuous:
-            start_paused = False        # kiosk: begin immediately
+        self.continuous = continuous    # auto-restart each game (no pause between games)
         self.start_paused = start_paused
         seed = cfg["game"].get("seed")
         self.rng = random.Random(seed) if seed is not None else random.Random()
@@ -293,7 +291,11 @@ class BattleTetris:
         llm_cfg = dict(cfg.get("llm", {}))
         if no_llm:
             llm_cfg["enabled"] = False
-        gm = cfg["game"]["garbage_multiplier"]
+        # Garbage attacks are opt-in: when disabled, clearing lines sends nothing
+        # (effective multiplier 0), and the LLM prompt drops its "attack" rule.
+        gm = (cfg["game"]["garbage_multiplier"]
+              if cfg["game"].get("garbage_enabled", False) else 0)
+        self.garbage_mult = gm
         # Two clients: the right board always; the left board only in LLM-vs-LLM
         # mode (a separate client so their requests never clobber each other).
         self.client = LLMClient(llm_cfg, garbage_multiplier=gm)
@@ -326,10 +328,10 @@ class BattleTetris:
     def reset(self):
         g = self.cfg["game"]
         self.player = Game(self.rng, g["player_gravity_ms"], g["lock_delay_ms"],
-                           g["garbage_multiplier"])
+                           self.garbage_mult)
         self.player.soft_drop_ms = g["soft_drop_ms"]
         self.llm = Game(self.rng, g["player_gravity_ms"], g["lock_delay_ms"],
-                        g["garbage_multiplier"])
+                        self.garbage_mult)
         self.player.start()
         self.llm.start()
         self.controller = LLMController(self.client, g)
@@ -519,18 +521,23 @@ class BattleTetris:
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="Tetris Duel: You vs an LLM.")
+    parser = argparse.ArgumentParser(
+        description="Tetris Duel. By default it opens preset to a continuous "
+                    "LLM-vs-LLM match, paused — just press P to start it.")
+    parser.add_argument("--human", action="store_true",
+                        help="play yourself vs the LLM (default is LLM vs LLM)")
+    parser.add_argument("--no-continuous", action="store_true",
+                        help="play a single game instead of auto-restarting each time")
+    parser.add_argument("--autostart", action="store_true",
+                        help="start playing immediately instead of waiting for P")
+    parser.add_argument("--garbage", action="store_true",
+                        help="enable garbage attacks (clearing N lines sends garbage); off by default")
     parser.add_argument("--no-llm", action="store_true",
                         help="disable the network LLM; the heuristic AI plays instead")
     parser.add_argument("--regen-assets", action="store_true",
                         help="regenerate image assets before starting")
     parser.add_argument("--frames", type=int, default=None,
                         help="run N frames then exit (headless self-test)")
-    parser.add_argument("--ai", action="store_true",
-                        help="start in LLM vs LLM mode (the model plays both boards)")
-    parser.add_argument("--continuous", action="store_true",
-                        help="kiosk mode: start playing and auto-restart each game "
-                             "(great with --ai for an always-running LLM vs LLM display)")
     args = parser.parse_args(argv)
 
     if args.regen_assets:
@@ -538,7 +545,15 @@ def main(argv=None):
         ensure_assets(force=True)
 
     cfg = load_config()
-    game = BattleTetris(cfg, no_llm=args.no_llm, ai=args.ai, continuous=args.continuous)
+    if args.garbage:
+        cfg["game"]["garbage_enabled"] = True
+    game = BattleTetris(
+        cfg,
+        no_llm=args.no_llm,
+        start_paused=not args.autostart,        # default: wait for P
+        ai=not args.human,                       # default: LLM vs LLM
+        continuous=not args.no_continuous,       # default: auto-restart each game
+    )
     game.run(max_frames=args.frames)
     return 0
 

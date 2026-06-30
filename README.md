@@ -5,7 +5,8 @@ Model plays the other. The model isn't scripted AI — it's a real LLM that, eve
 turn, is handed the board state and a menu of legal moves and **chooses where to
 place each piece**, then explains its reasoning in a panel under its board.
 
-Clear lines to bury your opponent. Survive longer than the machine.
+Clear lines and outlast the machine — or just press **P** and watch two LLMs
+duel each other continuously (that's the default when you launch).
 
 ![screenshot](docs/screenshot.png)
 
@@ -32,19 +33,19 @@ This isn't "Tetris with a bot." A few things set it apart:
 - **It matches your speed.** The AI watches how fast *you* drop pieces and tunes
   its own cadence to match — or run slightly faster — so it keeps its board
   clean and the duel stays tense instead of one side running away.
-- **Garbage warfare.** Clearing N lines doesn't just score points — it dumps
-  `N × 2` garbage rows onto your opponent's board from the bottom, each solid
-  except a single gap. A good multi-line clear can bury the other player.
+- **Optional garbage warfare.** Turn it on and clearing N lines dumps `N × 2`
+  garbage rows onto your opponent's board from the bottom, each solid except a
+  single gap — a good multi-line clear can bury them. **Off by default** (the two
+  boards just race); enable with `--garbage` or in the config.
 - **Watch it play itself.** Press **L** on the start screen to flip into
   **LLM vs LLM** mode — the model battles itself across both boards, each side
   narrating its own moves in its own panel.
 - **It's a match, not a round.** A running **wins scoreboard** sits at the top
   and survives restarts, so you can settle it over many games.
-- **Runs unattended (continuous mode).** Auto-restarts each game with no pause.
-  Point it at **LLM vs LLM** and you get a self-running display — a demo loop, a
-  lobby/kiosk screen, a stream backdrop, or just an idle-desktop spectacle — that
-  plays forever while the scoreboard climbs. One command:
-  `play.bat --ai --continuous`.
+- **Runs unattended (continuous mode).** On by default: auto-restarts each game
+  with no pause. The default launch is already a self-running **LLM vs LLM**
+  display — a demo loop, a lobby/kiosk screen, a stream backdrop, or just an
+  idle-desktop spectacle — that plays forever while the scoreboard climbs.
 - **Works with any small local model.** The opponent runs against any
   OpenAI-compatible endpoint. The menu is presented best-candidate-first, so even
   a tiny 0.5B model plays a clean board. If the model ever stalls or replies with
@@ -104,23 +105,22 @@ virtual environment (`.venv`), installs the dependencies into it, and launches
 the game. Later runs reuse the environment and start immediately. (Requires
 Python 3 on your PATH; nothing else to set up.)
 
-**Any platform / terminal:**
+**Any platform / terminal:** `python run.py`
+
+By default the game opens **preset to a continuous LLM-vs-LLM match, paused** —
+just press **P** to start it, and it then plays and auto-restarts on its own. To
+play it yourself instead, add `--human` (or press **L** on the paused screen).
+
+Flags (work with `play.bat` too, e.g. `play.bat --human`):
 
 ```bash
-python run.py
+python run.py --human          # play yourself vs the LLM
+python run.py --no-continuous  # play a single game (don't auto-restart)
+python run.py --autostart      # skip the paused screen, start immediately (true kiosk)
+python run.py --garbage        # enable garbage attacks (off by default)
+python run.py --no-llm         # opponent(s) use the built-in heuristic (no network)
+python run.py --regen-assets   # regenerate the PNG art before starting
 ```
-
-Useful flags (work with `play.bat` too, e.g. `play.bat --no-llm`):
-
-```bash
-python run.py --no-llm           # opponent uses the built-in heuristic (no network)
-python run.py --ai               # start in LLM vs LLM mode
-python run.py --ai --continuous  # always-running LLM vs LLM (kiosk/demo) — never pauses
-python run.py --regen-assets     # regenerate the PNG art before starting
-```
-
-The game **starts paused** — press **P** to begin (except `--continuous`, which
-starts immediately and keeps restarting on its own).
 
 ---
 
@@ -143,10 +143,11 @@ starts immediately and keeps restarting on its own).
 
 On the paused start screen, press **L** to switch between:
 
-- **Human vs LLM** (default) — you play the left board, the model plays the right.
-- **LLM vs LLM** — the model plays *both* boards and battles itself; each side
-  gets its own reply panel so you can watch both trains of thought. Keyboard
-  input is disabled in this mode. Press **L** again to switch back.
+- **LLM vs LLM** (default) — the model plays *both* boards and battles itself;
+  each side gets its own reply panel so you can watch both trains of thought.
+  Keyboard input is disabled in this mode.
+- **Human vs LLM** — you play the left board, the model plays the right. Press
+  **L** to switch to it (or launch with `--human`).
 
 ### Scoring & restart
 
@@ -158,16 +159,17 @@ fresh scoreboard.
 
 ### Continuous (kiosk) mode
 
-Press **C** (any time) to toggle **continuous** mode — a green “● CONTINUOUS”
-badge shows when it's on. In continuous mode, when a game ends the result is held
-briefly and then the game **auto-restarts with no pause**, scoreboard intact.
+Continuous mode is **on by default** — when a game ends, the result is held
+briefly and the game **auto-restarts with no pause**, scoreboard intact. A green
+“● CONTINUOUS” badge shows when it's active; press **C** any time to toggle it.
 
-Combine it with **LLM vs LLM** for a hands-off, always-running match. Launch
-straight into it from the command line:
+Because the default launch is already a continuous LLM-vs-LLM match (just press
+**P**), `play.bat` alone gives you a hands-off, always-running show. To skip even
+the **P** keypress (fully unattended kiosk):
 
 ```bash
-play.bat --ai --continuous        # Windows
-python run.py --ai --continuous   # any platform
+play.bat --autostart        # Windows
+python run.py --autostart   # any platform
 ```
 
 Handy as a demo loop, an idle "attract" screen, a lobby/kiosk display, or a
@@ -205,7 +207,8 @@ and, thanks to the best-first move menu, still keeps a clean board.
 | `player_gravity_ms` | How fast your pieces fall (ms per row). Lower = harder. |
 | `soft_drop_ms` | Fall speed while holding ↓. |
 | `lock_delay_ms` | Grace period to nudge a piece before it locks. |
-| `garbage_multiplier` | Lines sent to the opponent per line you clear (default `2`). |
+| `garbage_enabled` | `false` (default): clearing lines does **not** attack the opponent. `true` turns garbage attacks on. |
+| `garbage_multiplier` | Garbage rows sent per line cleared, when `garbage_enabled` is `true` (default `2`). |
 | `llm_speed_factor` | How much faster than you the AI tries to play (`1.15` = ~15% faster). |
 | `llm_max_cadence_ms` | Slowest the AI will go, so it keeps moving even if you idle. |
 | `llm_anim_min_step_ms` / `llm_anim_max_step_ms` | Bounds on the AI's piece-animation speed. |
@@ -215,7 +218,10 @@ and, thanks to the best-first move menu, still keeps a clean board.
 
 ## How garbage works
 
-When you clear `N` lines at once, your opponent's board gains
+Garbage attacks are **off by default** (`garbage_enabled: false`) — the two
+boards simply race to survive. Enable them with `--garbage` or in the config.
+
+When enabled: clearing `N` lines at once gives your opponent
 `N × garbage_multiplier` rows shoved up from the bottom — each row solid except
 for one shared gap column. Garbage is queued and applied just before the
 receiving side's next piece spawns (so it never shoves a falling piece into a
@@ -252,7 +258,7 @@ tetris/
   renderer.py     draws boards, HUDs, reply panel, overlays
   main.py         game loop, input/DAS, modes + scoreboard, LLM controller (pipeline + tempo)
 generate_assets.py    procedural Pillow art (auto-runs on first launch)
-tests/smoke.py        headless logic checks (123 assertions, no window/network)
+tests/smoke.py        headless logic checks (127 assertions, no window/network)
 tests/capture.py      headless screenshot + live-LLM functional test
 config.example.json   template config (copy to config.json)
 play.bat              double-click launcher (Windows)

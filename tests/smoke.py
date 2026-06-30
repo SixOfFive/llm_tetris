@@ -191,15 +191,38 @@ def test_ai_vs_ai():
             pass
 
 
+def test_garbage_default_off():
+    from tetris.main import BattleTetris, load_config
+    from tetris.game import Game
+    from tetris.constants import COLS, ROWS
+    from tetris.pieces import Piece
+    cfg = load_config()
+    check("garbage_enabled defaults off", cfg["game"].get("garbage_enabled", False) is False)
+    g = BattleTetris(cfg, no_llm=True)
+    check("effective garbage multiplier is 0 when off", g.garbage_mult == 0)
+    g.client.shutdown(); g.client_left.shutdown()
+    # a Game with multiplier 0: clearing a line sends 0 attack
+    game = Game(random.Random(1), 800, 500, 0)
+    for x in range(COLS):
+        game.board.grid[ROWS - 1][x] = "L"
+    game.current = Piece("I", rot=1, px=0)
+    res = game.hard_drop()
+    check("clearing a row sends no garbage when off", res.lines >= 1 and res.attack == 0)
+
+
 def test_continuous_restart():
     import pygame
     from tetris.main import BattleTetris, load_config
     cfg = load_config()
     cfg["game"]["seed"] = 9
-    game = BattleTetris(cfg, no_llm=True, ai=True, continuous=True)
+    # NEW default: continuous starts PAUSED (press P), it no longer auto-starts
+    g0 = BattleTetris(cfg, no_llm=True, ai=True, continuous=True)
+    check("continuous starts paused (press P to begin)", g0.state == "paused")
+    g0.client.shutdown(); g0.client_left.shutdown()
+    # once playing, a game-over auto-restarts without pausing
+    game = BattleTetris(cfg, no_llm=True, ai=True, continuous=True, start_paused=False)
     try:
-        check("continuous mode starts unpaused", game.state == "playing")
-        # force a game over and confirm it auto-restarts (without pausing)
+        check("plays when start_paused is False", game.state == "playing")
         game.player.dead = True
         game.step(16)
         check("game over recorded", game.state == "over")
@@ -210,6 +233,7 @@ def test_continuous_restart():
         check("auto-restarted to playing (no pause)", game.state == "playing")
         check("scoreboard persisted across auto-restart", game.score_right >= won)
     finally:
+        game.client.shutdown(); game.client_left.shutdown()
         try:
             pygame.quit()
         except Exception:
@@ -227,6 +251,7 @@ if __name__ == "__main__":
     print("== attack exchange =="); test_attack_exchange()
     print("== full loop (dummy video, no network) =="); test_full_loop()
     print("== ai vs ai loop =="); test_ai_vs_ai()
+    print("== garbage off by default =="); test_garbage_default_off()
     print("== continuous auto-restart =="); test_continuous_restart()
     print(f"\n{PASS} passed, {FAIL} failed")
     sys.exit(1 if FAIL else 0)

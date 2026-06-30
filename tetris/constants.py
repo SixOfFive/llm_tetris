@@ -80,7 +80,8 @@ DEFAULTS = {
     "llm_anim_max_step_ms": 240,  # slowest per-step (keeps motion from looking frozen)
     "llm_speed_factor": 1.15,    # AI places this much faster than the human's pace
     "llm_max_cadence_ms": 6000,  # cap so the AI keeps moving even if the human idles
-    "garbage_multiplier": 2,
+    "garbage_enabled": False,    # OFF by default: clearing lines does NOT attack the opponent
+    "garbage_multiplier": 2,     # lines sent per line cleared, WHEN garbage_enabled is true
     "seed": None,
 }
 
